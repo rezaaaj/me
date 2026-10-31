@@ -1,0 +1,64 @@
+mixed-port: 10808
+allow-lan: true
+mode: rule
+log-level: warning
+ipv6: true
+
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  # Use domestic DNS for fast lookup
+  nameserver:
+    - 119.29.29.29
+    - 223.5.5.5
+  # Fallback to encrypted foreign DNS for poisoned domains
+  fallback:
+    - https://cloudflare-dns.com/dns-query
+    - tls://dns.google
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    geosite:
+      - gfw
+  # Force Chinese domains to only use domestic DNS
+  nameserver-policy:
+    'geosite:cn':
+      - 119.29.29.29
+      - 223.5.5.5
+    'geosite:private':
+      - 119.29.29.29
+
+proxies:
+  - name: "HTTP-Proxy"
+    type: http
+    server: brd.superproxy.io
+    port: 44445
+    username: "brd-customer-hl_c208ac27-zone-isp_proxy1"
+    password: "wngz3t12zl47"
+
+proxy-groups:
+  - name: "Proxy"
+    type: select
+    proxies:
+      - HTTP-Proxy
+      - DIRECT
+
+rules:
+  # Block UDP on port 443 (Prevents QUIC bypass)
+  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT
+
+  # Route Google to proxy
+  - GEOSITE,google,Proxy
+
+  # Direct routing for local/private traffic
+  - GEOSITE,private,DIRECT
+  - GEOIP,private,DIRECT,no-resolve
+
+  # Direct routing for mainland China traffic
+  - GEOSITE,cn,DIRECT
+  - GEOIP,cn,DIRECT,no-resolve
+
+  # Fallback/Match all other traffic to the Proxy
+  - MATCH,Proxy
